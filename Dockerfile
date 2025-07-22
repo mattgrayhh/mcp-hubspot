@@ -22,4 +22,4 @@ RUN python -c "from sentence_transformers import SentenceTransformer; \
 EXPOSE 8000
 
 # Run the server
-ENTRYPOINT ["mcp-server-hubspot"] 
+ENTRYPOINT ["mcp-server-hubspot"]

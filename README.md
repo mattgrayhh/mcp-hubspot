@@ -69,7 +69,7 @@ docker run -e HUBSPOT_ACCESS_TOKEN=your_token buryhuang/mcp-hubspot:latest
 ### HTTP/SSE Mode
 
 Set `MCP_SERVER_HTTP=1` to expose a small FastAPI server with a heartbeat
-SSE stream and a `/tools` endpoint. This is useful for workflows that expect
+SSE stream at `/sse` and a `/tools` endpoint. This is useful for workflows that expect
 HTTP access (e.g. n8n).
 
 ```bash
