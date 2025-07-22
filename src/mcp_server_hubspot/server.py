@@ -298,3 +298,20 @@ if __name__ == "__main__":
     load_dotenv()
     
     asyncio.run(main(args.access_token))
+
+from sse_starlette.sse import EventSourceResponse
+from fastapi import APIRouter
+import asyncio
+
+router = APIRouter()
+
+@router.get("/stream")
+async def stream():
+    async def event_generator():
+        while True:
+            yield {
+                "event": "heartbeat",
+                "data": "ping"
+            }
+            await asyncio.sleep(5)
+    return EventSourceResponse(event_generator())
