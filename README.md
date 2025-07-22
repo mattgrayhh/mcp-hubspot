@@ -66,6 +66,18 @@ npx -y @smithery/cli@latest install mcp-hubspot --client claude
 docker run -e HUBSPOT_ACCESS_TOKEN=your_token buryhuang/mcp-hubspot:latest
 ```
 
+### HTTP/SSE Mode
+
+Set `MCP_SERVER_HTTP=1` to expose a small FastAPI server with a heartbeat
+SSE stream at `/sse` and a `/tools` endpoint. This is useful for workflows that expect
+HTTP access (e.g. n8n).
+
+```bash
+docker run -e HUBSPOT_ACCESS_TOKEN=your_token \
+           -e MCP_SERVER_HTTP=1 -p 8000:8000 \
+           buryhuang/mcp-hubspot:latest
+```
+
 ### Docker Configuration
 
 For manual configuration in Claude desktop:

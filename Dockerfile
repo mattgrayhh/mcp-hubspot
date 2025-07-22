@@ -18,5 +18,8 @@ RUN python -c "from sentence_transformers import SentenceTransformer; \
     model = SentenceTransformer('all-MiniLM-L6-v2'); \
     model.save('/app/models/all-MiniLM-L6-v2')"
 
+# Expose default HTTP port for optional HTTP mode
+EXPOSE 8000
+
 # Run the server
-ENTRYPOINT ["mcp-server-hubspot"] 
+ENTRYPOINT ["mcp-server-hubspot"]
