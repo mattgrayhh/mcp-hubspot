@@ -24,7 +24,7 @@ import uvicorn
 # Router for optional HTTP/SSE mode
 router = APIRouter()
 
-@router.get("/stream")
+@router.get("/sse")
 async def stream():
     async def event_generator():
         while True:
