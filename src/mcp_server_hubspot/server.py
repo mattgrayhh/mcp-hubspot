@@ -17,6 +17,21 @@ import mcp.server.stdio
 from pydantic import AnyUrl
 
 from sentence_transformers import SentenceTransformer
+from fastapi import FastAPI, APIRouter
+from sse_starlette.sse import EventSourceResponse
+import uvicorn
+
+# Router for optional HTTP/SSE mode
+router = APIRouter()
+
+@router.get("/stream")
+async def stream():
+    async def event_generator():
+        while True:
+            yield {"event": "heartbeat", "data": "ping"}
+            await asyncio.sleep(5)
+
+    return EventSourceResponse(event_generator())
 
 from .hubspot_client import HubSpotClient, ApiException
 from .faiss_manager import FaissManager
@@ -56,23 +71,30 @@ async def main(access_token: Optional[str] = None):
         search_handler
     )
     
-    # Based on MCP implementation, use stdio_server as a context manager that yields streams
-    async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
-        # Log server start
-        logger.info("Server running with stdio transport")
-        
-        # Create initialization options with capabilities
-        initialization_options = InitializationOptions(
-            server_name="hubspot-manager",
-            server_version="0.2.0",
-            capabilities=server.get_capabilities(
-                notification_options=NotificationOptions(),
-                experimental_capabilities={}
+    if os.getenv("MCP_SERVER_HTTP") == "1":
+        logger.info("Server running in HTTP mode")
+        app = create_fastapi_app(server)
+        config = uvicorn.Config(app, host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
+        http_server = uvicorn.Server(config)
+        await http_server.serve()
+    else:
+        # Based on MCP implementation, use stdio_server as a context manager that yields streams
+        async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+            # Log server start
+            logger.info("Server running with stdio transport")
+
+            # Create initialization options with capabilities
+            initialization_options = InitializationOptions(
+                server_name="hubspot-manager",
+                server_version="0.2.0",
+                capabilities=server.get_capabilities(
+                    notification_options=NotificationOptions(),
+                    experimental_capabilities={}
+                )
             )
-        )
-        
-        # Run the server with the provided streams and options
-        await server.run(read_stream, write_stream, initialization_options)
+
+            # Run the server with the provided streams and options
+            await server.run(read_stream, write_stream, initialization_options)
 
 def initialize_embedding_model() -> SentenceTransformer:
     """Initialize and return the embedding model."""
@@ -140,6 +162,19 @@ def create_server_with_handlers(
             
     return server
 
+
+def create_fastapi_app(server: Server) -> FastAPI:
+    """Create FastAPI app exposing server tools via HTTP."""
+    app = FastAPI()
+    app.include_router(router)
+
+    @app.get("/tools")
+    async def list_tools() -> List[Dict[str, Any]]:
+        tools = getattr(server, "available_tools", [])
+        return [t.model_dump() for t in tools]
+
+    return app
+
 def register_resource_handlers(server: Server) -> None:
     """Register resource-related handlers with the server.
     
@@ -175,16 +210,13 @@ def register_tool_definitions(
         ticket_handler: Handler for ticket operations
         search_handler: Handler for search operations
     """
-    @server.list_tools()
-    async def handle_list_tools() -> list[types.Tool]:
-        """List available tools"""
-        return [
-            # Company tools
-            types.Tool(
-                name="hubspot_create_company",
-                description="Create a new company in HubSpot",
-                inputSchema=company_handler.get_create_company_schema(),
-            ),
+    tools = [
+        # Company tools
+        types.Tool(
+            name="hubspot_create_company",
+            description="Create a new company in HubSpot",
+            inputSchema=company_handler.get_create_company_schema(),
+        ),
             types.Tool(
                 name="hubspot_get_company_activity",
                 description="Get activity history for a specific company",
@@ -233,7 +265,14 @@ def register_tool_definitions(
                 description="Search for similar data in stored HubSpot API responses",
                 inputSchema=search_handler.get_search_data_schema(),
             ),
-        ]
+    ]
+
+    server.available_tools = tools
+
+    @server.list_tools()
+    async def handle_list_tools() -> list[types.Tool]:
+        """List available tools"""
+        return tools
 
 def register_tool_call_handler(
     server: Server,
@@ -299,19 +338,3 @@ if __name__ == "__main__":
     
     asyncio.run(main(args.access_token))
 
-from sse_starlette.sse import EventSourceResponse
-from fastapi import APIRouter
-import asyncio
-
-router = APIRouter()
-
-@router.get("/stream")
-async def stream():
-    async def event_generator():
-        while True:
-            yield {
-                "event": "heartbeat",
-                "data": "ping"
-            }
-            await asyncio.sleep(5)
-    return EventSourceResponse(event_generator())
